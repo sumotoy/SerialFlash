@@ -75,7 +75,7 @@ static uint32_t check_signature(void)
 	if (sig[0] == 0xFA96554C) return sig[1];
 	if (sig[0] == 0xFFFFFFFF) {
 		sig[0] = 0xFA96554C;
-		sig[1] = ((DEFAULT_STRINGS_SIZE/4) << 16) | DEFAULT_MAXFILES;
+		sig[1] = ((uint32_t)(DEFAULT_STRINGS_SIZE/4) << 16) | DEFAULT_MAXFILES;
 		SerialFlash.write(0, sig, 8);
 		while (!SerialFlash.ready()) ; // TODO: timeout
 		SerialFlash.read(0, sig, 8);
@@ -236,8 +236,8 @@ static uint32_t string_length(uint32_t addr)
 	while (1) {
 		SerialFlash.read(addr, buf, sizeof(buf));
 		for (p=buf; p < buf + sizeof(buf); p++) {
-			if (*p == 0) return len;
 			len++;
+			if (*p == 0) return len;
 		}
 		addr += len;
 	}
@@ -336,6 +336,7 @@ bool SerialFlashChip::readdir(char *filename, uint32_t strsize, uint32_t &filesi
 	uint32_t maxfiles, index, straddr;
 	uint32_t i, n;
 	uint32_t buf[2];
+	uint16_t hash;
 	char str[16], *p=filename;
 
 	filename[0] = 0;
@@ -343,10 +344,14 @@ bool SerialFlashChip::readdir(char *filename, uint32_t strsize, uint32_t &filesi
 	if (!maxfiles) return false;
 	maxfiles &= 0xFFFF; 
 	index = dirindex;
-	if (index >= maxfiles) return false;
+	while (1) {
+		if (index >= maxfiles) return false;
+		 //Serial.printf("readdir, index = %u\n", index);
+		SerialFlash.read(8 + index * 2, &hash, 2);
+		if (hash != 0) break;
+		index++;  // skip deleted entries
+	}
 	dirindex = index + 1;
-	 //Serial.printf("readdir, index = %u\n", index);
-
 	buf[1] = 0;
 	SerialFlash.read(8 + 4 + maxfiles * 2 + index * 10, buf, 6);
 	if (buf[0] == 0xFFFFFFFF) return false;
