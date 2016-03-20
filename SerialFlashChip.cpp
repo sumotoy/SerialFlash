@@ -46,12 +46,12 @@ static IO_REG_TYPE cspin_bitmask;
 #define FLAG_256K_BLOCKS	0x10	// has 256K erase blocks
 #define FLAG_DIE_MASK		0xC0	// top 2 bits count during multi-die erase
 
-void SerialFlashChip::wait(void)
+void SerialFlashChip::wait(bool forceSpiTransaction)
 {
 	uint32_t status;
 	//Serial.print("wait-");
 	while (1) {
-		SPI.beginTransaction(SPICONFIG);
+		if (forceSpiTransaction) SPI.beginTransaction(SPICONFIG);
 		CSASSERT();
 		if (flags & FLAG_STATUS_CMD70) {
 			// some Micron chips require this different
@@ -67,7 +67,7 @@ void SerialFlashChip::wait(void)
 			SPI.transfer(0x05);
 			status = SPI.transfer(0);
 			CSRELEASE();
-			SPI.endTransaction();
+			if (forceSpiTransaction) SPI.endTransaction();
 			//Serial.printf("b=%02x.", status & 0xFF);
 			if (!(status & 1)) break;
 		}
@@ -133,10 +133,10 @@ void SerialFlashChip::read(uint32_t addr, void *buf, uint32_t len)
 			}
 		} else {
 			// chip is busy with an operation that can not suspend
-			SPI.endTransaction();	// is this a good idea?
-			wait();			// should we wait without ending
+			//SPI.endTransaction();	// is this a good idea?
+			wait(false);			// should we wait without ending
 			b = 0;			// the transaction??
-			SPI.beginTransaction(SPICONFIG);
+			//SPI.beginTransaction(SPICONFIG);
 		}
 	}
 	do {
@@ -182,9 +182,10 @@ void SerialFlashChip::write(uint32_t addr, const void *buf, uint32_t len)
 	uint32_t max, pagelen;
 
 	 //Serial.printf("WR: addr %08X, len %d\n", addr, len);
+	 SPI.beginTransaction(SPICONFIG);
 	do {
-		if (busy) wait();
-		SPI.beginTransaction(SPICONFIG);
+		if (busy) wait(false);
+		//SPI.beginTransaction(SPICONFIG);
 		CSASSERT();
 		// write enable command
 		SPI.transfer(0x06);
@@ -208,8 +209,9 @@ void SerialFlashChip::write(uint32_t addr, const void *buf, uint32_t len)
 		} while (--pagelen > 0);
 		CSRELEASE();
 		busy = 1;
-		SPI.endTransaction();
+		//SPI.endTransaction();
 	} while (len > 0);
+	SPI.endTransaction();
 }
 
 void SerialFlashChip::eraseAll()
@@ -244,6 +246,7 @@ void SerialFlashChip::eraseAll()
 		CSRELEASE();
 		 //Serial.printf("Micron erase begin\n");
 		flags |= (die_index + 1) << 6;
+		SPI.endTransaction();//missed?
 	} else {
 		// All other chips support the bulk erase command
 		SPI.beginTransaction(SPICONFIG);
@@ -264,8 +267,9 @@ void SerialFlashChip::eraseAll()
 void SerialFlashChip::eraseBlock(uint32_t addr)
 {
 	uint8_t f = flags;
-	if (busy) wait();
 	SPI.beginTransaction(SPICONFIG);
+	if (busy) wait(false);
+	//SPI.beginTransaction(SPICONFIG);
 	CSASSERT();
 	SPI.transfer(0x06); // write enable command
 	CSRELEASE();
@@ -392,6 +396,7 @@ void SerialFlashChip::sleep()
 	CSASSERT();
 	SPI.transfer(0xB9); // Deep power down command
 	CSRELEASE();
+	SPI.endTransaction();//missed?
 }
 
 void SerialFlashChip::wakeup()
@@ -400,12 +405,14 @@ void SerialFlashChip::wakeup()
 	CSASSERT();
 	SPI.transfer(0xAB); // Wake up from deep power down command
 	CSRELEASE();
+	SPI.endTransaction();//missed?
 }
 
 void SerialFlashChip::readID(uint8_t *buf)
 {
-	if (busy) wait();
 	SPI.beginTransaction(SPICONFIG);
+	if (busy) wait(false);
+	//SPI.beginTransaction(SPICONFIG);
 	CSASSERT();
 	SPI.transfer(0x9F);
 	buf[0] = SPI.transfer(0); // manufacturer ID

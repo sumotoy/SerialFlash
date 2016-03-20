@@ -44,7 +44,7 @@ public:
 	static void readID(uint8_t *buf);
 	static void read(uint32_t addr, void *buf, uint32_t len);
 	static bool ready();
-	static void wait();
+	static void wait(bool forceSpiTransaction=true);
 	static void write(uint32_t addr, const void *buf, uint32_t len);
 	static void eraseAll();
 	static void eraseBlock(uint32_t addr);
